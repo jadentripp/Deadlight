@@ -1,10 +1,6 @@
 DEADLIGHT third-party character assets
 
-Zombie_Basic.glb, Zombie_Chubby.glb, Zombie_Arm.glb
+Zombie_Basic.glb, Zombie_Chubby.glb, Zombie_Arm.glb (embedded in index.html as data)
   From the "Zombie Apocalypse Kit" by Quaternius (https://quaternius.com)
   License: CC0 1.0 Universal (Public Domain Dedication) https://creativecommons.org/publicdomain/zero/1.0/
   Repacked from the distributed glTF (embedded buffers) into binary GLB without modification of the content.
-
-Skeleton_Minion/Rogue/Warrior/Mage.glb (loaded at runtime from jsDelivr GitHub CDN)
-  From "KayKit Character Pack: Skeletons 1.0" by Kay Lousberg (https://kaylousberg.com)
-  License: CC0 1.0 Universal https://creativecommons.org/publicdomain/zero/1.0/
