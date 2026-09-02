@@ -4,7 +4,7 @@ A browser wave-survival zombie FPS in the spirit of round-based zombies modes: p
 
 **Play:** https://jadentripp.github.io/Deadlight/
 
-Built with [Three.js](https://threejs.org). Everything ships in a single `index.html` (the zombie character models are embedded as data; skeleton models stream from the jsDelivr CDN).
+Built with [Three.js](https://threejs.org). Everything ships in a single `index.html` — the zombie character models are embedded as data, so it runs from any origin with no external asset hosting.
 
 ## Controls
 
@@ -20,5 +20,4 @@ Built with [Three.js](https://threejs.org). Everything ships in a single `index.
 See [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
 
 - Zombie characters: *Zombie Apocalypse Kit* by [Quaternius](https://quaternius.com) — CC0 1.0
-- Skeleton characters: *KayKit Character Pack: Skeletons 1.0* by [Kay Lousberg](https://kaylousberg.com) — CC0 1.0
 - Fonts via Google Fonts (Anton, Barlow Condensed, Share Tech Mono)
