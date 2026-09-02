@@ -2,7 +2,7 @@
 
 A browser wave-survival zombie FPS in the spirit of round-based zombies modes: points, barricaded windows, wall-buys, a Mystery Box, perks gated behind the power switch, Pack-a-Punch upgrades and classic power-ups — with a fully synthesized soundscape and touch controls for phones.
 
-**Play:** https://jadentripp.github.io/deadlight/
+**Play:** https://jadentripp.github.io/Deadlight/
 
 Built with [Three.js](https://threejs.org). Everything ships in a single `index.html` (the zombie character models are embedded as data; skeleton models stream from the jsDelivr CDN).
 
