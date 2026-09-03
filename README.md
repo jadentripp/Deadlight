@@ -18,4 +18,5 @@ Built with [Three.js](https://threejs.org). Everything ships in a single `index.
 ## Assets
 
 - Zombie character: original, built for this project (AI-generated concept and base mesh, hand-authored rig, textures, and animation set) — see [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
+- All 9 weapons (Sidearm, Viper, Breacher, Sentinel, Warden, ARC-9, Mauler, Longbow, Nova): original models built for this project (AI-generated concept and base mesh, projected original textures), embedded in index.html — see [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
 - Fonts via Google Fonts (Anton, Barlow Condensed, Share Tech Mono)

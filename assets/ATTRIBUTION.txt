@@ -1,7 +1,14 @@
-DEADLIGHT character assets
+DEADLIGHT character and weapon assets
 
 zombie_original (embedded in index.html as data)
   Original character created for this project: AI-generated concept art and
   base mesh, with hand-authored rigging, texturing, and animation
   (Idle, Walk, Run, Attack, Crawl, Death). No third-party models,
   textures, or animation clips.
+
+gun models: sidearm, viper, breacher, sentinel, warden, arc9, mauler,
+longbow, nova (embedded in index.html as data)
+  Original weapon models created for this project: AI-generated concept
+  art and base meshes, with textures projected from the original concept
+  art. Barrel convention -Z, "Muzzle" locator at each barrel tip for
+  tracers/flash. No third-party models or textures.
