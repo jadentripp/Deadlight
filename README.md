@@ -15,9 +15,7 @@ Built with [Three.js](https://threejs.org). Everything ships in a single `index.
 | F buy / interact · F (hold) repair barricade | | Tap the on-screen prompt (hold to repair) |
 | G grenade · V knife · 1/2 or wheel swap · Esc pause | | FRAG · KNIFE · SWAP · pause button |
 
-## Third-party assets
+## Assets
 
-See [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
-
-- Zombie characters: *Zombie Apocalypse Kit* by [Quaternius](https://quaternius.com) — CC0 1.0
+- Zombie character: original, built for this project (AI-generated concept and base mesh, hand-authored rig, textures, and animation set) — see [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
 - Fonts via Google Fonts (Anton, Barlow Condensed, Share Tech Mono)

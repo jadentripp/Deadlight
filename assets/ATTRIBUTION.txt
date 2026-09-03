@@ -1,6 +1,7 @@
-DEADLIGHT third-party character assets
+DEADLIGHT character assets
 
-Zombie_Basic.glb, Zombie_Chubby.glb, Zombie_Arm.glb (embedded in index.html as data)
-  From the "Zombie Apocalypse Kit" by Quaternius (https://quaternius.com)
-  License: CC0 1.0 Universal (Public Domain Dedication) https://creativecommons.org/publicdomain/zero/1.0/
-  Repacked from the distributed glTF (embedded buffers) into binary GLB without modification of the content.
+zombie_original (embedded in index.html as data)
+  Original character created for this project: AI-generated concept art and
+  base mesh, with hand-authored rigging, texturing, and animation
+  (Idle, Walk, Run, Attack, Crawl, Death). No third-party models,
+  textures, or animation clips.
