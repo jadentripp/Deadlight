@@ -3,8 +3,15 @@ DEADLIGHT character and weapon assets
 zombie_original (embedded in index.html as data)
   Original character created for this project: AI-generated concept art and
   base mesh, with hand-authored rigging, texturing, and animation
-  (Idle, Walk, Run, Attack, Crawl, Death). No third-party models,
-  textures, or animation clips.
+  (Idle, Walk, Walk2 limp, Run, Run2 feral sprint, Attack, Attack2 swipe,
+  Attack3 overhead slam, HitReact, HitReact2, Crawl, Climb window vault,
+  Death). No third-party models, textures, or animation clips.
+
+first-person arms / knife / grenade & magazine props (in index.html)
+  Original procedural viewmodel rig (arms, gloved hands, combat knife,
+  grenade and magazine props) built in code for this project, with
+  hand-authored reload, knife-slash and grenade-throw motions.
+  No third-party models, textures, or animation clips.
 
 gun models: sidearm, viper, breacher, sentinel, warden, arc9, mauler,
 longbow, nova (embedded in index.html as data)
