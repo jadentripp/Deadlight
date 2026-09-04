@@ -1,0 +1,10 @@
+import { mkdir, cp, rm, readFile, access } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+await access('vendor/three.module.js');
+execFileSync(process.execPath, ['--check', 'game.js'], { stdio: 'inherit' });
+await rm('dist', { recursive: true, force: true });
+await mkdir('dist');
+for (const path of ['index.html', 'styles.css', 'game.js', 'motion.js', 'zombie-animation.js', 'window-traversal.js', 'assets', 'vendor', '.nojekyll']) await cp(path, `dist/${path}`, { recursive: true });
+const html = await readFile('dist/index.html', 'utf8');
+for (const [, path] of html.matchAll(/(?:src|href)="\.\/([^"#?]+)"/g)) await access(`dist/${path}`);
+console.log('Static game built. Runtime and original models are served locally.');
