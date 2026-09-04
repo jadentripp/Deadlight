@@ -1,15 +1,16 @@
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-export async function readRig() {
- const src=readFileSync(new URL('../assets/models/zombie_original.glb',import.meta.url));
+import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
+export async function readRig(asset='zombie_original') {
+ const src=readFileSync(new URL('../assets/models/'+asset+'.glb',import.meta.url));
  const len=src.readUInt32LE(12), json=JSON.parse(src.toString('utf8',20,20+len));
  delete json.materials;delete json.textures;delete json.images;
  for(const mesh of json.meshes)for(const p of mesh.primitives)delete p.material;
  const text=Buffer.from(JSON.stringify(json)), padded=Buffer.alloc(Math.ceil(text.length/4)*4,32);text.copy(padded);
  const bin=src.subarray(20+len), out=Buffer.alloc(20+padded.length+bin.length);
  out.write('glTF');out.writeUInt32LE(2,4);out.writeUInt32LE(out.length,8);out.writeUInt32LE(padded.length,12);out.write('JSON',16);padded.copy(out,20);bin.copy(out,20+padded.length);
- return new GLTFLoader().parseAsync(out.buffer,'');
+ return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(out.buffer,'');
 }
 if(process.argv[1]?.endsWith('audit-animations.mjs')) {
  const gltf=await readRig();const mixer=new THREE.AnimationMixer(gltf.scene);

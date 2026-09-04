@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // Contact phases are shared by the animation player and gameplay events.
 export const CONTACT = Object.freeze({attack: 0.48, attack2: 0.48, attack3: 0.51, crawlAttack: 0.5, crawlBash: 0.48, melee: 0.42, grenade: 0.62, reloadOut: 0.18, reloadIn: 0.78, reloadBolt: 0.90});
-export const STRIDE = Object.freeze({walk: 1.10, walk2: 1.04, run: 2.18, run2: 1.76, crawl: 0.72});
+export const STRIDE = Object.freeze({walk: 1.10, walk2: 1.04, run: 2.18, run2: 1.76, crawl: 0.56});
 
 const axis = new THREE.Vector3(), bend = new THREE.Vector3();
 // Analytic two-bone IK. The pole controls the bend plane; the endpoint is

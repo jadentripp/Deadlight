@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction } from './motion.js';
 import { ZombieAnimator, actionRole } from './zombie-animation.js';
+import { applyCharacterLook, addWeaponLighting } from './character-look.js';
 import { VAULT, vaultPose, windowPoint } from './window-traversal.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -947,8 +948,6 @@ const FX = {
 // ---------------------------------------------------------------- online character models (CC0)
 // Original character data is served from assets/models; animation corrections are baked separately.
 const ZOMBIE_CLIPS = { idle: ['Idle', 'idle'], walk: ['Walk', 'walk', 'Zombie_Walk', 'Walking'], walk2: ['Walk2', 'Limp', 'WalkB'], run: ['Run', 'run', 'Running', 'Sprint'], run2: ['Run2', 'Sprint2', 'RunB'], attack: ['Attack', 'attack', 'Punch', 'Bite', 'Hit'], attack2: ['Attack2', 'Swipe'], attack3: ['Attack3', 'Slam'], hit: ['HitReact', 'HitRecieve', 'Hit_React', 'Damage'], hit2: ['HitReact2', 'Hit2'], death: ['Death', 'death', 'Die', 'Dead'], rise: ['Rise', 'GetUp', 'StandUp'], crawl: ['Crawl', 'crawl'], climb: ['Climb', 'Vault'], crawlIdle: ['CrawlIdle'], crawlAttack: ['CrawlAttack'], crawlDeath: ['CrawlDeath'], crawlClimb: ['CrawlClimb'], crawlBash: ['CrawlBash'] };
-// per-instance tints so a horde of three meshes reads as many different zombies
-const ZOMBIE_TINTS = [[1, 1, 1], [0.78, 0.92, 0.78], [0.72, 0.76, 0.82], [0.92, 0.8, 0.76], [0.66, 0.7, 0.62], [0.86, 0.9, 0.7], [0.6, 0.62, 0.66]];
 const MODEL_URLS = {
   "zombie_original": "assets/models/zombie_original.glb"
 };
@@ -1051,9 +1050,7 @@ const MODELS = {
     for (const role in L.clips) if (L.clips[role]) actions[role] = mixer.clipAction(L.clips[role]);
     const headMeshes = []; obj.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && L.def.headMeshes && L.def.headMeshes.some((n) => o.name.includes(n))) headMeshes.push(o); });
     let headBone = null; obj.traverse((o) => { if (!headBone && o.isBone && /head/i.test(o.name)) headBone = o; });
-    // per-instance material variation (tint + darkening); materials are cloned so instances differ
-    const tint = choice(ZOMBIE_TINTS), dark = rand(0.78, 1.0); const cloned = new Map();
-    obj.traverse((o) => { if (!(o.isMesh || o.isSkinnedMesh) || !o.material) return; const fix = (m) => { if (!cloned.has(m)) { const c = m.clone(); if (!/glow|eye/.test((m.name || '').toLowerCase())) c.color.multiply(new THREE.Color(tint[0] * dark, tint[1] * dark, tint[2] * dark)); cloned.set(m, c); } return cloned.get(m); }; o.material = Array.isArray(o.material) ? o.material.map(fix) : fix(o.material); });
+    applyCharacterLook(obj, MODEL_DEFS.findIndex(def=>def.id===id));
     const chestBone = obj.getObjectByName('chest') || headBone;
     const model = { id, obj, mixer, actions, headMeshes, headBone, chestBone, L, cur: null };
     model.animator = new ZombieAnimator(model); return model;
@@ -1208,7 +1205,7 @@ class Zombie {
     const inst = MODELS.instance(id); const L = inst.L; const targetH = L.def.height * rand(0.94, 1.06); inst.hScale = targetH / 1.8; const sc = targetH / L.height;
     inst.obj.scale.setScalar(sc); inst.obj.position.set(-L.centerX * sc, -L.footY * sc, -L.centerZ * sc); inst.obj.rotation.set(0, 0, 0);
     this.group.add(inst.obj); this.model = inst; this.body.visible = false; this.hitAnimT = 0;
-    this.crawler = !!inst.actions.crawl && this.type === 'walker' && Math.random() < 0.24; if (this.crawler) this.speed *= 0.65;
+    this.crawler = !!inst.actions.crawl && this.type === 'walker' && Math.random() < 0.24; if (this.crawler) this.speed *= 0.42;
     this._climbed = false; this.walkRole = inst.actions.walk2 && Math.random() < 0.45 ? 'walk2' : 'walk';
     this.runRole = inst.actions.run2 && Math.random() < 0.5 ? 'run2' : 'run';
     this.playModel(this.state === 'rise' && inst.actions.rise ? 'rise' : (this.crawler ? 'crawl' : this.walkRole), 1, this.state === 'rise');
@@ -1460,6 +1457,7 @@ const GUNS = {
       const gltf = await loadGLB(this.loader, GUN_URLS[id]);
       gltf.scene.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false; } });
       this.scenes[id] = gltf.scene;
+      this.failed = this.failed.filter(failed=>failed!==id);
       // A player may already be using the fallback while a slow download finishes.
       if (WPN.inv?.id === id && WPN.vm) WPN.equip();
       return true;
@@ -1478,6 +1476,7 @@ const GUNS = {
       const cloned = new Map();
       g.traverse((o) => { if (o.isMesh && o.material) { if (!cloned.has(o.material)) { const c = o.material.clone(); c.color.multiply(new THREE.Color(0.3, 0.24, 0.45)); c.emissive = new THREE.Color(0x8a4cf0); c.emissiveIntensity = 0.09; cloned.set(o.material, c); } o.material = cloned.get(o.material); } });
     }
+    g.userData.asset = id;
     return g;
   },
 };
@@ -1569,6 +1568,7 @@ const WPN = {
   slots: [null, null], cur: 0, vm: null, mesh: null, fireT: 0, heat: 0, reloading: false, reloadT: 0, reloadDur: 0, reloadStage: 0, swapping: false, swapT: 0, swapTo: 0, swapDone: false, meleeT: -1, meleeHit: false, kickZ: 0, kickR: 0, ads: 0, trigger: false, semiReady: true, wantAds: false, holstered: false, flashT: 0, meleeCd: 0, touchTarget: null, afFire: false, afT: 0,
   init(camera) {
     this.camera = camera; this.vm = new THREE.Group(); camera.add(this.vm);
+    this.studioLights = addWeaponLighting(camera);
     this.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), new THREE.MeshBasicMaterial({ map: TEX.flash, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide, color: new THREE.Color(1.9, 1.9, 1.9) })); this.flash.visible = false; this.vm.add(this.flash);
     this.flashLight = new THREE.PointLight(0xffb060, 0, 11, 2); this.flashLight.position.set(0.15, -0.05, -1.4); this.flashLight.layers.enable(1); camera.add(this.flashLight);
     this.tmpV = new THREE.Vector3(); this.tmpV2 = new THREE.Vector3(); this.tmpD = new THREE.Vector3(); this.tmpQ = new THREE.Quaternion();
@@ -1580,6 +1580,8 @@ const WPN = {
   equip() {
     if (this.mesh) { this.vm.remove(this.mesh); }
     const S = this.stats; this.mesh = buildGunMesh(S.kind, S.isPap, this.inv.id); this.vm.add(this.mesh); this.vm.traverse((o) => o.layers.set(1));
+    // Buying/swapping to an unloaded model gives that asset priority immediately.
+    if (!this.mesh.userData.asset) GUNS.load(this.inv.id);
     this.base = VM_POS[S.kind]; this.flash.position.copy(this.mesh.userData.muzzle.position);
     HUD.weapon(S.name, S.isPap); HUD.ammo(this.inv.mag, this.inv.reserve, S.mag); HUD.slots(this.cur, this.slots);
   },

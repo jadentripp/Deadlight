@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {readRig} from './audit-animations.mjs';
 import {solveTwoBone} from '../motion.js';
 import {VAULT,climbPhase} from '../window-traversal.js';
+import {contactPath} from '../gait.js';
 
 // Bake corrections once, outside the mobile render loop. Original GLB is kept
 // untouched so the character, textures, and source animation remain recoverable.
@@ -49,7 +50,8 @@ export async function refineAnimations() {
     action.time=source.duration*Math.min(phase,.999999);mixer.update(0);scene.updateMatrixWorld(true);
   };
   const bake = (name, duration, poser, loop=false) => {
-    const count=Math.ceil(duration*30),times=[],data=bones.map(()=>({p:[],q:[]}));
+    const sampleRate=/^(Walk2?|Run2?|Crawl)$/.test(name)?60:30;
+    const count=Math.ceil(duration*sampleRate),times=[],data=bones.map(()=>({p:[],q:[]}));
     for(let i=0;i<=count;i++) {
       const phase=i/count;times.push(duration*phase);poser(loop&&i===count?0:phase);scene.updateMatrixWorld(true);
       bones.forEach((b,j)=>{b.position.toArray(data[j].p,data[j].p.length);const values=data[j].q;
@@ -62,20 +64,82 @@ export async function refineAnimations() {
     return new THREE.AnimationClip(name,duration,tracks);
   };
   const out=[];
+  // Bone lengths and foot orientation come from the actual bind skeleton.
+  const footOrientation={L:get('footL').getWorldQuaternion(new THREE.Quaternion()),R:get('footR').getWorldQuaternion(new THREE.Quaternion())};
+  const setWorldRotation=(bone,q)=>{
+    bone.parent.getWorldQuaternion(parentQ).invert();bone.quaternion.copy(parentQ.multiply(q));
+    scene.updateMatrixWorld(true);
+  };
+  const plantFoot=(side,point,bend)=>{
+    solveChain(get('thigh'+side),get('shin'+side),get('foot'+side),point,bend);
+    setWorldRotation(get('foot'+side),footOrientation[side]);
+  };
+  const standingFeet=()=>{
+    for(const side of ['L','R']) {
+      const sign=side==='L'?1:-1;
+      target.set(sign*.105,-.875,side==='L'?.065:-.105);
+      pole.set(sign*.13,-.38,.65);plantFoot(side,target,pole);
+    }
+  };
+  const locomotion=(name,p)=>{
+    const crawl=name==='Crawl',role=name.toLowerCase(),run=name.startsWith('Run');
+    const angle=p*Math.PI*2,hips=get('hips');
+    if(crawl) {
+      // Low commando crawl: alternate pulling hands and bent, dragging legs.
+      // The source kicked both heels into the air like a swimming stroke.
+      hips.position.set(.014*Math.sin(angle),-.735,-.003);
+      hips.rotation.z=.022*Math.sin(angle);
+      get('chest').rotation.z=-.025*Math.sin(angle);
+      scene.updateMatrixWorld(true);
+      for(const side of ['L','R']) {
+        const sign=side==='L'?1:-1,q=p+(side==='R'?.5:0),hand=contactPath(role,q);
+        target.set(sign*.25,-.915+hand.y,.565+hand.z);
+        pole.set(sign*.5,-.87,.25);
+        solveChain(get('upperarm'+side),get('forearm'+side),get('hand'+side),target,pole);
+        const leg=contactPath(role,q+.5);
+        target.set(sign*.15,-.875+leg.y*.35,-.715+leg.z*.48);
+        pole.set(sign*.50,-.89,-.23);plantFoot(side,target,pole);
+      }
+      return;
+    }
+    hips.position.x=.018*Math.sin(angle);
+    hips.position.y=run?-.150-.030*Math.sin(angle*2):-.105+.018*Math.cos(angle*2);
+    hips.rotation.z=.025*Math.sin(angle);
+    hips.rotation.y=.055*Math.sin(angle);
+    get('chest').rotation.y=-.07*Math.sin(angle);
+    get('chest').rotation.z=-.018*Math.sin(angle);
+    get('neck').rotation.z*=.45;get('head').rotation.z*=.55;
+    scene.updateMatrixWorld(true);
+    for(const side of ['L','R']) {
+      const sign=side==='L'?1:-1,q=p+(side==='R'?.5:0),foot=contactPath(role,q);
+      target.set(sign*.105,-.875+foot.y,foot.z);
+      pole.set(sign*.13,-.3,.8);plantFoot(side,target,pole);
+      // Arms counter the opposite leg; elbows stay below/outside shoulders.
+      const swing=Math.cos(q*Math.PI*2),reach=run?.18:.14;
+      target.set(sign*.28,run?.05:-.055,(run?.18:.08)-swing*reach);
+      pole.set(sign*.30,-.35,-.22);
+      solveChain(get('upperarm'+side),get('forearm'+side),get('hand'+side),target,pole);
+      // Let the wrist follow the forearm; preserving its old world rotation
+      // after re-aiming the elbow produced a visibly broken wrist.
+      get('hand'+side).quaternion.identity();scene.updateMatrixWorld(true);
+    }
+  };
   for(const source of gltf.animations) {
     const name=source.name, isHit=name.startsWith('HitReact'), loop=/^(Idle|Walk2?|Run2?|Crawl)$/.test(name);
     const duration=name==='Idle'?3.4:source.duration;
     const clip=bake(name,duration,p=>{
       sample(source,p);
+      if(/^(Walk2?|Run2?|Crawl)$/.test(name)) {locomotion(name,p);return;}
       if(name==='Idle') get('hips').position.y=THREE.MathUtils.lerp(-.008,get('hips').position.y,.35);
-      if(name==='Crawl') {
-        get('hips').position.y-=.14;scene.updateMatrixWorld(true);
-        for(const side of ['L','R']) {
-          const phase=p*Math.PI*2+(side==='R'?Math.PI:0),hand=get('hand'+side);
-          hand.getWorldPosition(target);target.y=-.90+Math.max(0,Math.sin(phase))*.10;target.z+=Math.cos(phase)*.13;
-          pole.set(side==='L'?.7:-.7,-.6,.55);
-          solveChain(get('upperarm'+side),get('forearm'+side),hand,target,pole);
+      if(name==='Idle'||name.startsWith('Attack')) {
+        get('hips').position.y-=.035;scene.updateMatrixWorld(true);standingFeet();
+        if(name.startsWith('Attack'))for(const side of ['L','R']) {
+          const sign=side==='L'?1:-1;
+          get('hand'+side).getWorldPosition(target);target.x=sign*Math.max(.10,Math.abs(target.x));
+          pole.set(sign*.52,.0,.1);
+          solveChain(get('upperarm'+side),get('forearm'+side),get('hand'+side),target,pole);
         }
+        return;
       }
       if(name==='Climb') {
         const tuck=Math.sin(Math.PI*p)**2;
@@ -112,8 +176,9 @@ export async function refineAnimations() {
   const crawl=out.find(c=>c.name==='Crawl');
   out.push(bake('CrawlIdle',3.4,p=>{sample(crawl,0);get('chest').rotation.x+=Math.sin(p*Math.PI*2)*.018;},true));
   out.push(bake('CrawlAttack',1.2,p=>{
-    sample(crawl,0);const lunge=Math.sin(Math.PI*p)**2;
+    sample(crawl,0);const support=get('handL').getWorldPosition(v()),lunge=Math.sin(Math.PI*p)**2;
     get('hips').position.z+=.12*lunge;get('chest').rotation.x-=.1*lunge;scene.updateMatrixWorld(true);
+    pole.set(.5,-.87,.25);solveChain(get('upperarmL'),get('forearmL'),get('handL'),support,pole);
     get('handR').getWorldPosition(target);target.z+=.22*lunge;target.y+=.20*lunge;
     pole.set(-.7,-.55,.55);solveChain(get('upperarmR'),get('forearmR'),get('handR'),target,pole);
   }));
@@ -123,7 +188,9 @@ export async function refineAnimations() {
     scene.updateMatrixWorld(true);
     for (const side of ['L','R']) {
       const foot=get('foot'+side);foot.getWorldPosition(target);target.y=THREE.MathUtils.lerp(target.y,-.865,fall);
-      pole.set(side==='L'?.3:-.3,-.45,-.5);solveChain(get('thigh'+side),get('shin'+side),foot,target,pole);
+      // A prone corpse settles sideways at the knee. The standing knee pole
+      // lifted both knees into an arched pose as the pelvis hit the floor.
+      pole.set(side==='L'?.6:-.6,-.86,-.35);solveChain(get('thigh'+side),get('shin'+side),foot,target,pole);
       get('hand'+side).getWorldPosition(target);target.y=Math.max(-.90,target.y);
       pole.set(side==='L'?.7:-.7,-.6,.55);solveChain(get('upperarm'+side),get('forearm'+side),get('hand'+side),target,pole);
     }
@@ -145,7 +212,9 @@ export async function refineAnimations() {
     if(p<.18) blendPose(crawl,0,swipe,0,ease(p/.18));
     else if(p<.80) sample(swipe,(p-.18)/.62);
     else blendPose(swipe,.999999,crawl,0,ease((p-.8)/.2));
-    get('hips').position.z+=.55*Math.sin(Math.PI*p)**2;groundLegs();
+    // Keep the bash crouched instead of popping instantly to full height.
+    const brace=Math.sin(Math.PI*p)**2;
+    get('hips').position.z+=.32*brace;get('hips').position.y-=.30*brace;groundLegs();
   }));
   mixer.stopAllAction();reset();
   return out;

@@ -12,9 +12,14 @@ The fix establishes ownership:
 | `zombie-animation.js` | Action-to-posture clip selection, mixer transitions, gait phase, additive hits, inactive action cleanup | Does not move characters or apply damage |
 | `window-traversal.js` | Approach/landing points, vault duration, phase, path and height | Shared by gameplay, animation baking, and geometry checks |
 | `motion.js` | Contact phases, gait stride values, limb IK, smooth hand paths, action eligibility | Pure helpers independent of DOM, rendering and game state |
+| `gait.js` | Stance/swing contact trajectories | Shared by offline animation baking, runtime contacts and tests |
+| `ground-contacts.js` | Floor pins and post-animation limb corrections | Runs only during locomotion; releases before actions and when reach is exceeded |
+| `character-look.js` | Regional material variations and first-person-only lighting | Shared by the game and asset preview; preserves source geometry and textures |
 | `scripts/refine-animations.mjs` | Reproducible authored corrections and additional crawler clips | Runs offline; outputs `assets/animations.json` |
 
 Action has priority. `enter` resolves to Climb or CrawlClimb; `bash` to a posture-compatible barricade action; `death` to Death or CrawlDeath. Crawling is a clip choice within the action, never a reason to bypass it. Active vaults own horizontal movement; generic navigation and crowd separation do not advance them. The actor returns to chasing only when the shared timeline completes.
+
+The second movement audit found a related timing smell: smoothing measured speed and then smoothing animation rate introduced phase lag during acceleration and stopping. Measured distance now advances gait phase directly; smoothing remains only for choosing and blending poses. After the mixer samples a locomotion pose, floor contact constraints may correct its limbs. They cannot move the actor, override a vault, or change combat state.
 
 Reload may be interrupted by a new action. Swap, melee, and grenade are exclusive so two independent animation booleans cannot control the same hands. Hand contact phases are also used for reload sounds, knife damage and grenade release.
 

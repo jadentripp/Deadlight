@@ -11,10 +11,13 @@ Built with [Three.js](https://threejs.org). The game, renderer, models, and anim
 - Cacheable model files and one shared zombie decode replace the 20 MB inline page. The entry HTML is now about 9 KB; the original model data still downloads separately.
 - Clearer combat HUD, larger touch controls, safe-area spacing, quality settings, reduced camera motion, adaptive resolution, and a fixed light budget.
 - Action-driven character animation, travel-matched gaits, additive hit reactions, and proper elbow placement.
+- Rebuilt stance/swing cycles, floor contact locking, grounded crawler pulls, regional character looks, and first-person lighting for the original gun models.
 - Crawlers rise, vault through the window opening, and return to crawling. New crawl idle, attack, barricade, climb, and death clips complete the original 13-clip set.
 - Input cancellation, pause recovery, touch semiautomatic firing, line-of-sight aim assist, and exclusive first-person hand actions.
 
 Read the [animation audit](docs/ANIMATION_AUDIT.md) for findings, verification, and remaining visual limitations, and the [architecture notes](docs/ARCHITECTURE.md) for ownership boundaries and the WebGPU decision.
+
+Open **`workshop.html`** on the game host to rotate all nine weapons and the textured zombie, compare original/refined animation, scrub poses, and play clips in slow motion.
 
 ## Development
 

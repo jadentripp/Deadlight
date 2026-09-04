@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {STRIDE} from './motion.js';
+import {GroundContacts} from './ground-contacts.js';
 
 // Action is authoritative. Posture selects a compatible clip within that action.
 // Adding a locomotion style cannot bypass climbing, attacking, or dying.
@@ -22,6 +23,7 @@ export class ZombieAnimator {
   constructor(model) {
     this.model = model; this.speed = 0; this.hitTime = 0;
     this.actions = [...new Set(Object.values(model.actions))];
+    this.contacts = new GroundContacts(model.obj);
   }
   play(role, rate=1, once=false, fade=.2) {
     const m=this.model, a=m.actions[role]; if (!a) return;
@@ -55,11 +57,13 @@ export class ZombieAnimator {
       const role=!moving?idle:s.crawler?'crawl':run?s.runRole:s.walkRole;
       if(m.curRole!==role)this.play(role);
       if(m.cur) {
-        const rate=moving?clamp(this.speed*m.cur.getClip().duration/((STRIDE[role]||1.1)*s.scale),.03,3.8):1;
-        m.cur.timeScale=moving?damp(m.cur.timeScale,rate,12,dt):1;
+        // Distance owns the phase. Smoothing this rate separately made feet
+        // slide during acceleration and continue stepping against a wall.
+        m.cur.timeScale=moving?Math.max(0,s.speed)*m.cur.getClip().duration/((STRIDE[role]||1.1)*s.scale):1;
       }
     }
     this.advance(dt);
+    if(m.cur)this.contacts.update(m.curRole,m.cur.time/m.cur.getClip().duration,s.state,s.scale,m.cur.getEffectiveWeight());
   }
   advance(dt) {
     const m=this.model;

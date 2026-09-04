@@ -8,6 +8,7 @@ import {ZombieAnimator, actionRole} from '../zombie-animation.js';
 import {VAULT, vaultPose, windowPoint} from '../window-traversal.js';
 import {readRig} from '../scripts/audit-animations.mjs';
 import {clone as skeletonClone} from 'three/addons/utils/SkeletonUtils.js';
+import {applyCharacterLook,addWeaponLighting} from '../character-look.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const code = readFileSync(new URL('../game.js', import.meta.url), 'utf8')
@@ -25,7 +26,7 @@ function element() {
 function harness() {
   const nodes = new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],element()]));
   const document = {getElementById:id=>nodes.get(id)||null,body:element(),documentElement:element(),addEventListener(){},hidden:false};
-  const context = vm.createContext({THREE, VAULT, vaultPose, windowPoint, CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction, ZombieAnimator, actionRole, RenderPass, console, document, URL, URLSearchParams, AbortController, location:{search:''},
+  const context = vm.createContext({THREE, applyCharacterLook, addWeaponLighting, VAULT, vaultPose, windowPoint, CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction, ZombieAnimator, actionRole, RenderPass, console, document, URL, URLSearchParams, AbortController, location:{search:''},
     window:{innerWidth:844,innerHeight:390,addEventListener(){}},innerWidth:844,innerHeight:390,devicePixelRatio:2,
     matchMedia:()=>({matches:false}),navigator:{maxTouchPoints:5},performance:{now:()=>100},
     setTimeout,clearTimeout,requestAnimationFrame(){},localStorage:{getItem:()=>null,setItem(){}},

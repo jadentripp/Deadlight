@@ -7,6 +7,9 @@ import {readRig} from '../scripts/audit-animations.mjs';
 import {ZombieAnimator,actionRole} from '../zombie-animation.js';
 import {CONTACT,solveTwoBone,sampleMotion,canStartWeaponAction} from '../motion.js';
 import {VAULT,vaultPose,windowPoint} from '../window-traversal.js';
+import {contactPath} from '../gait.js';
+import {STRIDE} from '../motion.js';
+import {GroundContacts} from '../ground-contacts.js';
 const gltf=await readRig();
 const clips=JSON.parse(readFileSync(new URL('../assets/animations.json',import.meta.url))).clips.map(c=>THREE.AnimationClip.parse(c));
 const roles={idle:'Idle',walk:'Walk',walk2:'Walk2',run:'Run',run2:'Run2',crawl:'Crawl',crawlIdle:'CrawlIdle',crawlAttack:'CrawlAttack',crawlBash:'CrawlBash',crawlDeath:'CrawlDeath',crawlClimb:'CrawlClimb',climb:'Climb',attack:'Attack',attack2:'Attack2',attack3:'Attack3',hit:'HitReact',hit2:'HitReact2',death:'Death'};
@@ -42,6 +45,38 @@ test('a blocked zombie settles to idle; changing gait preserves foot phase',()=>
   m.animator.play('run');assert.ok(Math.abs(m.cur.time/m.cur.getClip().duration-.4)<1e-6);
   for(let i=0;i<60;i++)m.animator.update({...snapshot,speed:0},1/60);
   assert.equal(m.curRole,'idle');assert.ok(m.animator.actions.filter(a=>a.isScheduled()).length<=2);
+});
+test('baked feet and crawler hands match stationary floor contacts through every stance',()=>{
+  const m=rig(),point=new THREE.Vector3();
+  for(const role of ['walk','walk2','run','run2','crawl']){
+    m.mixer.stopAllAction();const a=m.actions[role];a.reset().play();
+    for(let i=0;i<100;i++){
+      a.time=a.getClip().duration*i/100;m.mixer.update(0);m.obj.updateMatrixWorld(true);
+      for(const side of ['L','R']){
+        const p=contactPath(role,i/100+(side==='R'?.5:0));if(!p.planted)continue;
+        m.obj.getObjectByName((role==='crawl'?'hand':'foot')+side).getWorldPosition(point);
+        assert.ok(Math.abs(point.z-p.z-(role==='crawl'?.565:0))<.002,`${role} phase ${i}: contact z`);
+        assert.ok(Math.abs(point.y-(role==='crawl'?-.915:-.875))<.002,`${role} phase ${i}: contact height`);
+      }
+    }
+  }
+});
+test('floor pins survive a moving turn and yield immediately to a vault',()=>{
+  const m=rig(),contacts=new GroundContacts(m.obj),a=m.actions.walk,point=new THREE.Vector3();a.reset().play();
+  let initial;
+  for(let i=0;i<14;i++){
+    const phase=.16+i*.008;a.time=phase*a.getClip().duration;m.mixer.update(0);
+    m.obj.position.z=(phase-.16)*STRIDE.walk;m.obj.rotation.y=i*.008;
+    contacts.update('walk',phase,'chase',1);m.obj.getObjectByName('footL').getWorldPosition(point);
+    if(!initial)initial=point.clone();else assert.ok(point.distanceTo(initial)<.00002,'planted foot drift');
+  }
+  contacts.update('walk',.3,'enter',1);assert.equal(contacts.pins.L.active,false);assert.equal(contacts.pins.R.active,false);
+});
+test('gait phase tracks completed distance during acceleration and stops immediately when blocked',()=>{
+  const m=rig();m.animator.play('walk',0);m.animator.speed=1;
+  let distance=0;for(let i=0;i<20;i++){const speed=.3+i*.045,dt=.01;distance+=speed*dt;m.animator.update({...snapshot,speed},dt);}
+  assert.ok(Math.abs(m.cur.time/m.cur.getClip().duration-distance/STRIDE.walk)<1e-6);
+  const time=m.cur.time;m.animator.update({...snapshot,speed:0},.01);assert.equal(m.cur.time,time);
 });
 test('hit reactions are additive and leave the locomotion leg pose untouched',()=>{
   const m=rig();m.animator.play('walk',0);m.cur.time=.7;m.mixer.update(0);
