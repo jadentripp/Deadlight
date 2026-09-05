@@ -4,6 +4,7 @@ import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import {applyCharacterLook} from './character-look.js';
+import {CARETAKER} from './zombie-rig.js';
 
 const $=id=>document.getElementById(id),cache=new Map();
 let renderer,scene,camera,controls,model,mixer,action,clips=[],refined=[],paused=false,request=0,oldTime=0;
@@ -15,24 +16,25 @@ function release(){
   materials.forEach(m=>m.dispose());skeletons.forEach(s=>s.dispose());model=mixer=action=null;
 }
 async function showAsset(){
-  const current=++request,id=$('asset').value,character=id==='zombie_original';
+  const current=++request,id=$('asset').value,character=id==='zombie_original'||id==='caretaker',profile=id==='caretaker'?CARETAKER:null;
   $('status').hidden=false;$('status').textContent='Loading '+$('asset').selectedOptions[0].textContent+'…';
   try{
     if(!cache.has(id))cache.set(id,loader.loadAsync('./assets/models/'+id+'.glb').catch(e=>{cache.delete(id);throw e;}));
     const gltf=await cache.get(id);if(current!==request)return;release();
     model=character?clone(gltf.scene):gltf.scene.clone(true);
     if(character&&$('look').value!=='original'){
-      applyCharacterLook(model,Number($('look').value));model.traverse(o=>{if(o.isMesh)o.userData.ownedMaterial=true;});
+      applyCharacterLook(model,Number($('look').value),profile);model.traverse(o=>{if(o.isMesh)o.userData.ownedMaterial=true;});
     }
     model.traverse(o=>{if(o.isMesh){o.frustumCulled=false;if(o.material.map)o.material.map.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());}});
     model.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
     const scale=character?2/size.y:2.1/Math.max(size.x,size.y,size.z);
-    model.scale.multiplyScalar(scale);model.position.set(-center.x*scale,-box.min.y*scale,-center.z*scale);scene.add(model);
+    model.scale.multiplyScalar(scale);model.position.fromArray(profile?.origin||[-center.x,-box.min.y,-center.z]).multiplyScalar(scale);scene.add(model);
     $('poseControls').classList.toggle('hidden',!character);
     controls.target.set(0,character?1:.40,0);camera.position.set(character?2.4:2.9,character?1.65:1.15,character?3.7:1.7);controls.update();
     $('title').textContent=$('asset').selectedOptions[0].textContent;
     $('caption').textContent=character?'Drag to rotate · in-place clip preview · gameplay adds travel and floor contacts':'Original GLB asset · drag to rotate · pinch or scroll to zoom';
-    if(character){mixer=new THREE.AnimationMixer(model);clips=$('version').value==='original'?gltf.animations:refined;chooseClips();}
+    $('versionControl').classList.toggle('hidden',!!profile);
+    if(character){mixer=new THREE.AnimationMixer(model);clips=profile||$('version').value==='original'?gltf.animations:refined;chooseClips();}
     $('status').hidden=true;
   }catch(error){if(current!==request)return;$('status').textContent='This asset could not load. Choose another asset, or reload to try again.';console.error(error);}
 }
@@ -43,7 +45,7 @@ function chooseClips(){
 function playClip(){
   if(!mixer)return;mixer.stopAllAction();const clip=clips.find(c=>c.name===$('clip').value);if(!clip)return;
   if(clip.blendMode===THREE.AdditiveAnimationBlendMode){const idle=clips.find(c=>c.name==='Idle');if(idle)mixer.clipAction(idle).reset().play();}
-  action=mixer.clipAction(clip);action.reset().play();$('scrub').value='0';mixer.update(0);
+  action=mixer.clipAction(clip);action.reset().play();setPaused(false);$('scrub').value='0';mixer.update(0);
 }
 function setPaused(value){paused=value;$('play').textContent=paused?'Play':'Pause';$('play').setAttribute('aria-pressed',String(paused));}
 async function init(){

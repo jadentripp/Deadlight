@@ -23,10 +23,11 @@ export class ZombieAnimator {
   constructor(model) {
     this.model = model; this.speed = 0; this.hitTime = 0;
     this.actions = [...new Set(Object.values(model.actions))];
-    this.contacts = new GroundContacts(model.obj);
+    this.contacts = new GroundContacts(model.obj,model.profile);
   }
   play(role, rate=1, once=false, fade=.2) {
     const m=this.model, a=m.actions[role]; if (!a) return;
+    if(once){m.hitAction?.stop();m.hitAction=null;this.hitTime=0;this.contacts.reset();}
     if (m.cur===a && !once) {a.timeScale=rate;m.curRole=role;return;}
     const prev=m.cur, phase=prev&&isGait(role)&&isGait(m.curRole) ? prev.time/prev.getClip().duration%1 : 0;
     a.reset().setEffectiveWeight(1);a.enabled=true;a.timeScale=rate;
@@ -59,7 +60,7 @@ export class ZombieAnimator {
       if(m.cur) {
         // Distance owns the phase. Smoothing this rate separately made feet
         // slide during acceleration and continue stepping against a wall.
-        m.cur.timeScale=moving?Math.max(0,s.speed)*m.cur.getClip().duration/((STRIDE[role]||1.1)*s.scale):1;
+        m.cur.timeScale=moving?Math.max(0,s.speed)*m.cur.getClip().duration/((m.profile?.stride[role]||STRIDE[role]||1.1)*s.scale):1;
       }
     }
     this.advance(dt);

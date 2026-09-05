@@ -5,7 +5,9 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import * as THREE from 'three';
 import {CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction} from '../motion.js';
 import {ZombieAnimator, actionRole} from '../zombie-animation.js';
-import {VAULT, vaultPose, windowPoint} from '../window-traversal.js';
+import {CARETAKER,bindZombieRig,prepareZombieClips} from '../zombie-rig.js';
+import {caretakerHitTest} from '../zombie-hit-zones.js';
+import {VAULT, vaultPose, windowPoint,vaultConfig} from '../window-traversal.js';
 import {readRig} from '../scripts/audit-animations.mjs';
 import {clone as skeletonClone} from 'three/addons/utils/SkeletonUtils.js';
 import {applyCharacterLook,addWeaponLighting} from '../character-look.js';
@@ -26,12 +28,12 @@ function element() {
 function harness() {
   const nodes = new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],element()]));
   const document = {getElementById:id=>nodes.get(id)||null,body:element(),documentElement:element(),addEventListener(){},hidden:false};
-  const context = vm.createContext({THREE, applyCharacterLook, addWeaponLighting, VAULT, vaultPose, windowPoint, CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction, ZombieAnimator, actionRole, RenderPass, console, document, URL, URLSearchParams, AbortController, location:{search:''},
+  const context = vm.createContext({THREE, skeletonClone, CARETAKER, bindZombieRig, prepareZombieClips, caretakerHitTest, vaultConfig, applyCharacterLook, addWeaponLighting, VAULT, vaultPose, windowPoint, CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction, ZombieAnimator, actionRole, RenderPass, console, document, URL, URLSearchParams, AbortController, location:{search:''},
     window:{innerWidth:844,innerHeight:390,addEventListener(){}},innerWidth:844,innerHeight:390,devicePixelRatio:2,
     matchMedia:()=>({matches:false}),navigator:{maxTouchPoints:5},performance:{now:()=>100},
     setTimeout,clearTimeout,requestAnimationFrame(){},localStorage:{getItem:()=>null,setItem(){}},
     fetch:async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(12)})});
-  vm.runInContext(code+'\nwindow.test={clearInputs,pauseGame,resumeNow,bindTouch,loadGLB,assetRequests,HUD,Resolution,LightBudget,ARMS,updateRound,rayMap,buildAtmosphere,updateCombatHUD,Zombie};',context);
+  vm.runInContext(code+'\nwindow.test={clearInputs,pauseGame,resumeNow,bindTouch,loadGLB,assetRequests,HUD,Resolution,LightBudget,ARMS,updateRound,rayMap,buildAtmosphere,updateCombatHUD,Zombie,MODEL_DEFS};',context);
   return {...context.window.__DL,...context.window.test,context,nodes,document};
 }
 function weaponHarness() {
@@ -47,7 +49,7 @@ test('all literal DOM hooks exist and all original GLBs are valid containers',()
   const dynamic=new Set(['btnRetry','reloadGame']);
   for(const [,id] of code.matchAll(/\$\('([^']+)'\)/g)) assert.ok(ids.includes(id)||dynamic.has(id),id);
   const dir=new URL('../assets/models/',import.meta.url);
-  assert.equal(readdirSync(dir).length,10);
+  assert.equal(readdirSync(dir).filter(n=>n.endsWith('.glb')).length,11);
   for(const name of readdirSync(dir)) {const b=readFileSync(new URL(name,dir));assert.equal(b.toString('ascii',0,4),'glTF');assert.equal(b.readUInt32LE(8),b.length);}
 });
 test('concurrent zombie variants share one download and parse',async()=>{
@@ -115,14 +117,21 @@ test('round completion waits for all scheduled enemies and counts down once',()=
   assert.equal(h.G.roundState,'intermission');assert.equal(h.G.roundTimer,7);h.updateRound(1);assert.equal(h.G.roundTimer,6);
 });
 
-const sourceRig=await readRig();
-const animationData=JSON.parse(readFileSync(new URL('../assets/animations.json',import.meta.url)));
+const sourceRig=await readRig('caretaker');
+test('game loads Caretaker once for all three variants without requesting legacy animation tracks',async()=>{
+  const h=harness(),urls=[];let parses=0;
+  h.context.fetch=async url=>{urls.push(String(url));return {ok:true,arrayBuffer:async()=>new ArrayBuffer(12)};};
+  h.MODELS.loader={parseAsync:async()=>{parses++;return sourceRig;}};
+  await h.MODELS.loadAll(true);
+  assert.deepEqual(urls,['https://game.example/Deadlight/assets/models/caretaker.glb']);
+  assert.equal(parses,1);assert.equal(h.MODELS.ready.length,3);
+  for(const id of h.MODELS.ready){const m=h.MODELS.instance(id);assert.equal(m.profile.id,'caretaker');assert.equal(m.chestBone.name,'spine_03');assert.equal(m.actions.attack3.getClip().name,'Attack3');}
+});
 function zombieHarness(crawler=true) {
-  const h=harness(),z=Object.create(h.Zombie.prototype),obj=skeletonClone(sourceRig.scene),mixer=new THREE.AnimationMixer(obj),actions={};
-  const names={crawl:'Crawl',crawlIdle:'CrawlIdle',crawlClimb:'CrawlClimb',crawlAttack:'CrawlAttack',crawlBash:'CrawlBash',crawlDeath:'CrawlDeath',climb:'Climb',death:'Death',idle:'Idle',walk:'Walk',run:'Run',attack:'Attack',attack2:'Attack2'};
-  for(const [role,name]of Object.entries(names))actions[role]=mixer.clipAction(THREE.AnimationClip.parse(animationData.clips.find(c=>c.name===name)));
-  obj.scale.setScalar(.96);obj.position.y=.99736*.96;
-  const model={obj,mixer,actions,cur:null,hScale:1,headMeshes:[]};model.animator=new ZombieAnimator(model);
+  const h=harness(),z=Object.create(h.Zombie.prototype);
+  h.MODELS.register(h.MODEL_DEFS[0],sourceRig);
+  const model=h.MODELS.instance('zombie_a'),obj=model.obj;
+  obj.scale.setScalar(.96);model.hScale=.96*CARETAKER.height/1.8;
   const group=new THREE.Group();group.add(obj);
   Object.assign(z,{alive:true,dying:false,state:'chase',crawler,model,group,scale:1,x:0,z:0,yaw:0,speed:1.1,vel:{x:0,z:0},tmp:{x:0,z:0},T:{speed:1.55,anim:1,lean:.16},groanT:999,hitFlash:0,stuckT:0,walkRole:'walk',runRole:'run',phase:0,arms:[new THREE.Group(),new THREE.Group()],elbows:[],legs:[],knees:[],headG:new THREE.Group(),upper:new THREE.Group(),shadow:{visible:true}});
   h.G.state='playing';h.PL.pos={x:0,z:20};h.ZM.list=[z];h.SFX.bite=()=>{};h.FX.splat=()=>{};
@@ -132,13 +141,13 @@ function zombieHarness(crawler=true) {
 test('crawler completes the entire window sequence at 30, 60, and 120 Hz',()=>{
   for(const fps of [30,60,120]){
     const h=zombieHarness(),z=h.z,w={x:0,z:0,outer:{x:0,z:-.95},inner:{x:0,z:1.3},boards:0};
-    z.x=0;z.z=-1.6;z.win=w;z.beginVault();let navigationCalls=0;h.NAV.move=()=>{navigationCalls++;return false;};
+    z.x=0;z.z=-1.75;z.win=w;z.beginVault();let navigationCalls=0;h.NAV.move=()=>{navigationCalls++;return false;};
     const frames=Math.ceil(2.5*fps);
     for(let i=0;i<frames;i++){
       z.update(1/fps,i/fps);
       if(i===Math.floor(frames/2)){const x=z.x,previousZ=z.z;h.ZM.pushAway(x-.1,previousZ,5,2);assert.equal(z.x,x);assert.equal(z.z,previousZ);}
       if(z.vault>.02&&z.vault<.98)assert.equal(z.model.curRole,'crawlClimb');
-      if(z.vault<.22)assert.ok(Math.abs(z.z+1.6)<1e-6);
+      if(z.vault<.22)assert.ok(Math.abs(z.z+1.75)<1e-6);
     }
     // Floating-point accumulation may leave one final frame in the clip.
     if(z.state==='enter')z.update(1/fps,2.5);

@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { CONTACT, solveTwoBone, sampleMotion, canStartWeaponAction } from './motion.js';
 import { ZombieAnimator, actionRole } from './zombie-animation.js';
 import { applyCharacterLook, addWeaponLighting } from './character-look.js';
-import { VAULT, vaultPose, windowPoint } from './window-traversal.js';
+import { CARETAKER, bindZombieRig, prepareZombieClips } from './zombie-rig.js';
+import { caretakerHitTest } from './zombie-hit-zones.js';
+import { VAULT, vaultPose, windowPoint, vaultConfig } from './window-traversal.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
@@ -945,11 +947,10 @@ const FX = {
 
 // ===== 45_models.js =====
 
-// ---------------------------------------------------------------- online character models (CC0)
-// Original character data is served from assets/models; animation corrections are baked separately.
+// Reviewed Caretaker asset: embedded animation and an explicit rig contract.
 const ZOMBIE_CLIPS = { idle: ['Idle', 'idle'], walk: ['Walk', 'walk', 'Zombie_Walk', 'Walking'], walk2: ['Walk2', 'Limp', 'WalkB'], run: ['Run', 'run', 'Running', 'Sprint'], run2: ['Run2', 'Sprint2', 'RunB'], attack: ['Attack', 'attack', 'Punch', 'Bite', 'Hit'], attack2: ['Attack2', 'Swipe'], attack3: ['Attack3', 'Slam'], hit: ['HitReact', 'HitRecieve', 'Hit_React', 'Damage'], hit2: ['HitReact2', 'Hit2'], death: ['Death', 'death', 'Die', 'Dead'], rise: ['Rise', 'GetUp', 'StandUp'], crawl: ['Crawl', 'crawl'], climb: ['Climb', 'Vault'], crawlIdle: ['CrawlIdle'], crawlAttack: ['CrawlAttack'], crawlDeath: ['CrawlDeath'], crawlClimb: ['CrawlClimb'], crawlBash: ['CrawlBash'] };
 const MODEL_URLS = {
-  "zombie_original": "assets/models/zombie_original.glb"
+  "caretaker": "assets/models/caretaker.glb"
 };
 
 const GUN_URLS = {
@@ -985,9 +986,9 @@ function loadGLB(loader, path) {
 }
 
 const MODEL_DEFS = [
-  { id: 'zombie_a', kind: 'zombie', asset: 'zombie_original', weight: 3, height: 1.86, clips: ZOMBIE_CLIPS, headMeshes: [], mobile: true },
-  { id: 'zombie_b', kind: 'zombie', asset: 'zombie_original', weight: 2, height: 1.9, clips: ZOMBIE_CLIPS, headMeshes: [], mobile: true },
-  { id: 'zombie_c', kind: 'zombie', asset: 'zombie_original', weight: 1.6, height: 1.84, clips: ZOMBIE_CLIPS, headMeshes: [], mobile: true },
+  { id: 'zombie_a', kind: 'zombie', asset: 'caretaker', profile: CARETAKER, weight: 3, height: 1.86, clips: ZOMBIE_CLIPS, headMeshes: [], mobile: true },
+  { id: 'zombie_b', kind: 'zombie', asset: 'caretaker', profile: CARETAKER, weight: 2, height: 1.9, clips: ZOMBIE_CLIPS, headMeshes: [], mobile: true },
+  { id: 'zombie_c', kind: 'zombie', asset: 'caretaker', profile: CARETAKER, weight: 1.6, height: 1.84, clips: ZOMBIE_CLIPS, headMeshes: [], mobile: true },
 ];
 function pickClip(anims, names) {
   if (!anims || !anims.length) return null;
@@ -998,13 +999,6 @@ function pickClip(anims, names) {
 const MODELS = {
   loaded: {}, ready: [], progress: { done: 0, total: 0 }, failed: [], enabled: true,
   init() { this.loader = new GLTFLoader(); },
-  animationClips() {
-    if (!this.animationRequest) this.animationRequest = fetch(new URL('./assets/animations.json', import.meta.url))
-      .then(r => { if (!r.ok) throw new Error('Animation download failed'); return r.json(); })
-      .then(data => data.clips.map(c => THREE.AnimationClip.parse(c)))
-      .catch(error => { console.warn(error); this.animationRequest = null; return null; });
-    return this.animationRequest;
-  },
   loadAll(mobileOnly = false) {
     const defs = MODEL_DEFS.filter((d) => !mobileOnly || d.mobile);
     return Promise.all(defs.map((d) => this.load(d)));
@@ -1012,8 +1006,8 @@ const MODELS = {
   async load(def) {
     this.progress.total++;
     try {
-      const [gltf, animations] = await Promise.all([loadGLB(this.loader, MODEL_URLS[def.asset] || def.url), this.animationClips()]);
-      this.register(def, animations ? {...gltf, animations} : gltf);
+      const gltf = await loadGLB(this.loader, MODEL_URLS[def.asset] || def.url);
+      this.register(def, gltf);
       return true;
     } catch (e) {
       console.warn('Character unavailable:', def.id, e.message);
@@ -1023,6 +1017,8 @@ const MODELS = {
   },
   register(def, gltf) {
     const scene = gltf.scene; scene.updateMatrixWorld(true);
+    bindZombieRig(scene, def.profile);
+    const animations = prepareZombieClips(gltf.animations, def.profile);
     const box = new THREE.Box3().setFromObject(scene); const height = Math.max(0.5, box.max.y - box.min.y); const footY = box.min.y; const centerX = (box.min.x + box.max.x) / 2, centerZ = (box.min.z + box.max.z) / 2;
     const mats = new Set();
     scene.traverse((o) => {
@@ -1030,11 +1026,11 @@ const MODELS = {
     });
     for (const m of mats) {
       const nm = (m.name || '').toLowerCase();
-      if (/glow|eye/.test(nm)) { m.emissive = new THREE.Color(0xff8a20); m.emissiveIntensity = 3.2; m.color.setHex(0x201008); }
-      else { if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; } m.roughness = Math.max(0.7, m.roughness ?? 0.8); m.metalness = 0; }
+      if (!def.profile && /glow|eye/.test(nm)) { m.emissive = new THREE.Color(0xff8a20); m.emissiveIntensity = 3.2; m.color.setHex(0x201008); }
+      else if (!def.profile) { if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; } m.roughness = Math.max(0.7, m.roughness ?? 0.8); m.metalness = 0; }
       m.needsUpdate = true;
     }
-    const clips = {}; for (const role in def.clips) clips[role] = pickClip(gltf.animations, def.clips[role]);
+    const clips = {}; for (const role in def.clips) clips[role] = pickClip(animations, def.clips[role]);
     if (!clips.walk) clips.walk = gltf.animations[0] || null;
     if (!clips.run) clips.run = clips.walk;
     if (!clips.attack) clips.attack = clips.walk;
@@ -1050,9 +1046,9 @@ const MODELS = {
     for (const role in L.clips) if (L.clips[role]) actions[role] = mixer.clipAction(L.clips[role]);
     const headMeshes = []; obj.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && L.def.headMeshes && L.def.headMeshes.some((n) => o.name.includes(n))) headMeshes.push(o); });
     let headBone = null; obj.traverse((o) => { if (!headBone && o.isBone && /head/i.test(o.name)) headBone = o; });
-    applyCharacterLook(obj, MODEL_DEFS.findIndex(def=>def.id===id));
-    const chestBone = obj.getObjectByName('chest') || headBone;
-    const model = { id, obj, mixer, actions, headMeshes, headBone, chestBone, L, cur: null };
+    applyCharacterLook(obj, MODEL_DEFS.findIndex(def=>def.id===id), L.def.profile);
+    const bones = bindZombieRig(obj,L.def.profile), chestBone = bones.chest || headBone;
+    const model = { id, obj, mixer, actions, headMeshes, headBone, chestBone, bones, profile:L.def.profile, L, cur: null };
     model.animator = new ZombieAnimator(model); return model;
   },
 };
@@ -1202,8 +1198,13 @@ class Zombie {
   // ---- online model attachment (GLTF, animated) with procedural fallback
   attachModel() {
     this.detachModel(); const id = MODELS.pick(); if (!id) { this.body.visible = true; return; }
-    const inst = MODELS.instance(id); const L = inst.L; const targetH = L.def.height * rand(0.94, 1.06); inst.hScale = targetH / 1.8; const sc = targetH / L.height;
-    inst.obj.scale.setScalar(sc); inst.obj.position.set(-L.centerX * sc, -L.footY * sc, -L.centerZ * sc); inst.obj.rotation.set(0, 0, 0);
+    const inst = MODELS.instance(id), L = inst.L, profile = inst.profile;
+    const targetH = L.def.height * rand(0.94, 1.06);
+    const sc = Math.min(targetH / (profile?.height || L.height), (profile?.maxScale || Infinity) / this.scale);
+    inst.hScale = sc * (profile?.height || L.height) / 1.8;
+    inst.obj.scale.setScalar(sc);
+    inst.obj.position.fromArray(profile?.origin || [-L.centerX, -L.footY, -L.centerZ]).multiplyScalar(sc);
+    inst.obj.rotation.set(0, 0, 0);
     this.group.add(inst.obj); this.model = inst; this.body.visible = false; this.hitAnimT = 0;
     this.crawler = !!inst.actions.crawl && this.type === 'walker' && Math.random() < 0.24; if (this.crawler) this.speed *= 0.42;
     this._climbed = false; this.walkRole = inst.actions.walk2 && Math.random() < 0.45 ? 'walk2' : 'walk';
@@ -1226,9 +1227,11 @@ class Zombie {
   beginVault() {
     if (!this.win || this.win.boards > 0) return;
     this.state = 'enter'; this.vault = 0; this.vaultElapsed = 0;
-    this.vaultStart = {x:this.x, z:this.z};
-    this.vaultDuration = VAULT[this.crawler ? 'crawler' : 'standing'].duration;
-    this.vaultEnd = windowPoint(this.win, this.crawler, true);
+    this.vaultStart = windowPoint(this.win,this.crawler,false,this.model?.profile);
+    this.x=this.vaultStart.x;this.z=this.vaultStart.z;
+    this.yaw=Math.atan2(this.win.inner.x-this.win.outer.x,this.win.inner.z-this.win.outer.z);
+    this.vaultDuration = vaultConfig(this.crawler,this.model?.profile).duration;
+    this.vaultEnd = windowPoint(this.win, this.crawler, true, this.model?.profile);
     this.vel.x = this.vel.z = 0;
   }
   beginAttack() {
@@ -1236,7 +1239,7 @@ class Zombie {
     const pool = this.crawler && A?.crawlAttack ? ['crawlAttack'] : ['attack', 'attack2', 'attack3'].filter(r => A?.[r]);
     this.atkRole = pool.length ? choice(pool) : 'attack';
     this.atkDur = A?.[this.atkRole]?.getClip().duration || 1.15;
-    this.atkStrike = this.atkDur * (CONTACT[this.atkRole] || .48);
+    this.atkStrike = this.atkDur * (this.model?.profile?.contact[this.atkRole] || CONTACT[this.atkRole] || .48);
     this.state = 'attack'; this.attackT = 0; this.struck = false;
     if (this.model) this.playModel(this.atkRole, 0, true, .12);
   }
@@ -1251,6 +1254,7 @@ class Zombie {
   // ray test: returns {t, head} or null
   hitTest(ox, oy, oz, dx, dy, dz, maxT) {
     if (!this.alive || this.dying) return null; const s = this.scale * (this.model ? this.model.hScale : 1); const gy = this.group.position.y;
+    if(this.model?.profile?.id==='caretaker')return caretakerHitTest(this.model,this.scale*this.model.obj.scale.y,this.headless,ox,oy,oz,dx,dy,dz,maxT);
     let best = null; const r = (this.crawler ? 0.5 : 0.3) * s, cx = this.x, cz = this.z;
     const fx = ox - cx, fz = oz - cz; const a = dx * dx + dz * dz, b = 2 * (fx * dx + fz * dz), c = fx * fx + fz * fz - r * r;
     if (a > 1e-6) { const disc = b * b - 4 * a * c; if (disc >= 0) { const t = (-b - Math.sqrt(disc)) / (2 * a); if (t > 0 && t < maxT) { const y = oy + dy * t; if (y > gy && y < gy + (this.crawler ? .85 : 1.55) * s) best = { t, head: false }; } } }
@@ -1294,7 +1298,7 @@ class Zombie {
       if (Math.random() < dt * 8) FX.dirt(this.x, this.z, 2);
       if (k >= 1) { this.state = 'chase'; g.position.y = 0; }
     } else if (this.state === 'toWindow') {
-      const w = this.win, approach = windowPoint(w, this.crawler);
+      const w = this.win, approach = windowPoint(w, this.crawler, false, this.model?.profile);
       const dx = approach.x - this.x, dz = approach.z - this.z, d = Math.hypot(dx, dz);
       if (d < .12) { this.vel.x = this.vel.z = 0; if (w.boards > 0) { this.state = 'bash'; this.bashElapsed = 0; this.bashStruck = false; } else this.beginVault(); } else { moveX = dx / d; moveZ = dz / d; speedK = Math.min(.9, d * 2); }
     } else if (this.state === 'bash') {
@@ -1304,7 +1308,8 @@ class Zombie {
       for (const a of this.arms) a.rotation.x = -.7 - hammer * 1.4;
       for (const e of this.elbows) e.rotation.x = -.6 + hammer * .3;
       this.upper.rotation.x = this.T.lean + .15 + hammer * .2;
-      const contact = this.crawler ? CONTACT.crawlBash : CONTACT.attack2;
+      const contacts = this.model?.profile?.contact || CONTACT;
+      const contact = this.crawler ? contacts.crawlBash : contacts.attack2;
       if (!this.bashStruck && ph >= contact) {
         this.bashStruck = true;
         if (w.boards > 0) { windowRemoveBoard(w); SFX.boardHit(w.x, w.z); }
@@ -1316,7 +1321,7 @@ class Zombie {
       const w = this.win;
       if (!this.vaultStart) this.beginVault();
       this.vaultElapsed += dt; this.vault = clamp(this.vaultElapsed / this.vaultDuration, 0, 1);
-      const {travel} = vaultPose(this.vault, this.crawler);
+      const {travel} = vaultPose(this.vault, this.crawler, this.scale*(this.model?.obj.scale.y||1), this.model?.profile);
       this.x = lerp(this.vaultStart.x, this.vaultEnd.x, travel); this.z = lerp(this.vaultStart.z, this.vaultEnd.z, travel);
       this.yaw = angleLerp(this.yaw, Math.atan2(w.inner.x - w.outer.x, w.inner.z - w.outer.z), 1 - Math.exp(-dt * 14));
       if (this.vault >= 1) { this.state = 'chase'; this.win = null; this.vaultStart = null; g.position.y = 0; }
@@ -1356,7 +1361,7 @@ class Zombie {
     const ph = this.phase;
     if (this.model) {
       this.animateModel(dt, vmag);
-      if (this.state === 'enter') g.position.y = vaultPose(this.vault, this.crawler, this.scale * this.model.obj.scale.y).height;
+      if (this.state === 'enter') g.position.y = vaultPose(this.vault, this.crawler, this.scale * this.model.obj.scale.y, this.model.profile).height;
       this.model.obj.updateWorldMatrix(true, true); return;
     }
     if (animate) {

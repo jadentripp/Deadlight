@@ -4,7 +4,7 @@ await access('vendor/three.module.js');
 execFileSync(process.execPath, ['--check', 'game.js'], { stdio: 'inherit' });
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist');
-for (const path of ['index.html', 'styles.css', 'game.js', 'motion.js', 'gait.js', 'ground-contacts.js', 'character-look.js', 'zombie-animation.js', 'window-traversal.js', 'workshop.html', 'workshop.js', 'assets', 'vendor', '.nojekyll']) await cp(path, `dist/${path}`, { recursive: true });
+for (const path of ['index.html', 'styles.css', 'game.js', 'motion.js', 'gait.js', 'ground-contacts.js', 'character-look.js', 'zombie-animation.js', 'zombie-rig.js', 'zombie-hit-zones.js', 'caretaker-vault-data.js', 'window-traversal.js', 'workshop.html', 'workshop.js', 'assets', 'vendor', '.nojekyll']) await cp(path, `dist/${path}`, { recursive: true });
 const html = await readFile('dist/index.html', 'utf8');
 for (const [, path] of html.matchAll(/(?:src|href)="\.\/([^"#?]+)"/g)) await access(`dist/${path}`);
 console.log('Static game built. Runtime and original models are served locally.');

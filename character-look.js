@@ -28,15 +28,22 @@ function geometryFor(mesh,index) {
   geometry.boundingSphere=source.boundingSphere?.clone()||null;
   variants[index]=geometry;return geometry;
 }
-export function applyCharacterLook(obj,index=0) {
+export function applyCharacterLook(obj,index=0,profile) {
   index=((index%CHARACTER_LOOKS.length)+CHARACTER_LOOKS.length)%CHARACTER_LOOKS.length;
   const materials=new Map();
   obj.traverse(mesh=>{
     if(!mesh.isMesh)return;
-    mesh.geometry=geometryFor(mesh,index);
+    if(!profile)mesh.geometry=geometryFor(mesh,index);
     const copy=source=>{
       if(!materials.has(source)){
-        const material=source.clone();material.color.setRGB(1,1,1);
+        const material=source.clone();
+        if(profile?.id==='caretaker') {
+          // Preserve the reviewed decay, cloudy eyes, skin and clothing maps.
+          // Only subtle workwear tint varies between spawned characters.
+          if(mesh.name==='Worn_workwear')material.color.multiply(new THREE.Color().setRGB(...[[1,1,1],[.94,.97,1.04],[1.04,.98,.92]][index]));
+          materials.set(source,material);return material;
+        }
+        material.color.setRGB(1,1,1);
         material.vertexColors=!!mesh.geometry.getAttribute('color');
         material.metalness=0;material.roughness=.86;
         if(material.map)material.map.colorSpace=THREE.SRGBColorSpace;

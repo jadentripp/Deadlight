@@ -4,10 +4,14 @@ A browser wave-survival zombie FPS in the spirit of round-based zombies modes: p
 
 **Play:** [Deadlight on GitHub Pages](https://jadentripp.github.io/Deadlight/)
 
+**Caretaker preview:** [Private game build](https://deadlight-polish.jadentripp.chatgpt.site)
+
 Built with [Three.js](https://threejs.org). The game, renderer, models, and animation data are served from the same origin. Google Fonts is optional; local font fallbacks remain available.
 
 ## Mobile polish and motion update
 
+- The reviewed Caretaker now replaces every loaded enemy: anatomical mesh, decayed skin, cloudy eyes, 53 joints, and 18 embedded animations. Left and right swipes retain their independent arm motion.
+- An explicit rig adapter preserves the reviewed materials, maps floor contacts and anatomical bullet hit zones, and converts absolute hit reactions into torso-only additive motion. Window paths are calibrated for the new proportions.
 - Cacheable model files and one shared zombie decode replace the 20 MB inline page. The entry HTML is now about 9 KB; the original model data still downloads separately.
 - Clearer combat HUD, larger touch controls, safe-area spacing, quality settings, reduced camera motion, adaptive resolution, and a fixed light budget.
 - Action-driven character animation, travel-matched gaits, additive hit reactions, and proper elbow placement.
@@ -17,7 +21,7 @@ Built with [Three.js](https://threejs.org). The game, renderer, models, and anim
 
 Read the [animation audit](docs/ANIMATION_AUDIT.md) for findings, verification, and remaining visual limitations, and the [architecture notes](docs/ARCHITECTURE.md) for ownership boundaries and the WebGPU decision.
 
-Open **`workshop.html`** on the game host to rotate all nine weapons and the textured zombie, compare original/refined animation, scrub poses, and play clips in slow motion.
+Open **`workshop.html`** on the game host to rotate Caretaker and all nine weapons, scrub poses, and play clips in slow motion. The older zombie remains available there for comparison.
 
 ## Development
 
@@ -32,7 +36,7 @@ npm run dev
 
 The build produces `dist/`. Serving the repository directly also works, including GitHub Pages under a repository subpath. Open the game through HTTP(S), not `file://`.
 
-To edit the pose corrections, change `scripts/refine-animations.mjs`, then run `npm run bake:animations` and `npm test`. The original GLB remains unchanged. `scripts/render-poses.mjs` exports actual skinned mesh samples; `scripts/render-poses.py` makes contact sheets using NumPy and Matplotlib. These CPU audit views do not reproduce the game's lighting or materials.
+Caretaker uses the animations embedded in `assets/models/caretaker.glb`. See [integration notes](docs/CARETAKER.md) for provenance, rig conventions, and validation. After changing this mesh or its climb clips, run `node scripts/calibrate-caretaker-vault.mjs` and `npm test` to recalibrate and check the window path. The old `bake:animations` command and pose-render scripts only maintain the original character for comparison; they do not replace Caretaker's clips.
 
 ## Controls
 
@@ -45,6 +49,6 @@ To edit the pose corrections, change `scripts/refine-animations.mjs`, then run `
 
 ## Assets
 
-- Zombie character: original, built for this project (AI-generated concept and base mesh, hand-authored rig, textures, and animation set) — see [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
+- Caretaker zombie: CC0 MakeHuman anatomical base and system assets, original generated decay texture and Deadlight animation work — see [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt). The original zombie remains as a comparison asset.
 - All 9 weapons (Sidearm, Viper, Breacher, Sentinel, Warden, ARC-9, Mauler, Longbow, Nova): original models built for this project (AI-generated concept and base mesh, projected original textures), stored in `assets/models/` — see [`assets/ATTRIBUTION.txt`](assets/ATTRIBUTION.txt).
 - Fonts via Google Fonts (Anton, Barlow Condensed, Share Tech Mono)

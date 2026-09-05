@@ -1,5 +1,19 @@
 DEADLIGHT character and weapon assets
 
+caretaker (assets/models/caretaker.glb) -- current gameplay character
+  Reviewed Caretaker revision eeb3fd7caca8551e183cdcc7029acd7b4cf13546.
+  MakeHuman hm08 anatomical mesh, morph targets, weights and bundled system
+  assets are CC0. Asset release holders: Data Collection AB, Joel Palmius,
+  Jonas Hauquier. MPFB is a separate GPL authoring tool; no MPFB application
+  code is shipped in the browser.
+  https://static.makehumancommunity.org/about/license.html
+  https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
+  Original generated decay texture and authored/retargeted Deadlight motion.
+  Editable source, source texture prompts, and detailed credits:
+  https://deadlight-zombie-review.jadentripp.chatgpt.site
+  18 embedded clips; runtime adapter and window calibration in zombie-rig.js
+  and scripts/calibrate-caretaker-vault.mjs. See docs/CARETAKER.md.
+
 zombie_original (assets/models/zombie_original.glb)
   Original character created for this project: AI-generated concept art and
   base mesh, with hand-authored rigging, texturing, and animation

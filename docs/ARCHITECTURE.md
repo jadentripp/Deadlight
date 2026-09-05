@@ -1,5 +1,7 @@
 # Motion architecture and renderer decision
 
+The current game integrates the reviewed Caretaker. See [Caretaker integration](CARETAKER.md) for its explicit rig adapter, embedded clip ownership, hit zones and calibrated window paths. The original clip-baking pipeline described below remains available for the comparison character; it no longer supplies the gameplay character's animations.
+
 ## Why crawlers bypassed windows
 
 The original animation chain checked `crawler` before `attack` and `enter`. A locomotion style competed with gameplay actions, so a crawler could keep playing its prone loop while navigation moved it through a zombie-only window channel. Meanwhile, movement progress, clip playback, attack damage, and corpse cleanup each used independent timing rules.
